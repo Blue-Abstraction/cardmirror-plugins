@@ -6,19 +6,25 @@ This is an ongoing project, so more plugins will come out!
 Email me at `blueabstractionoop@gmail.com` for any comments, issues, or more features you want to see added!
 
 ## Installation
+You can watch my video for installing these plugins, or follow the text instructions below.
+
+[![Watch the video.](https://img.youtube.com/vi/mBk_caQd4cs/0.jpg)](https://www.youtube.com/watch?v=mBk_caQd4cs)
+
 Go to the latest release in [releases](https://github.com/Blue-Abstraction/cardmirror-plugins/releases) for this repository to find the files you need to download.
 Before installation, make sure your CardMirror is not running.
 ### Windows
 1. Download the .exe file.
-2. Run the .exe file. In the window that pops up, select the location of CardMirror's _installation file_ (if it's not automatically found). To find the installation file, right-click the CardMirror application and select `Open File Location`. Copy the file location and paste it into the installer.
-3. Select the features you want installed and press `Install Selected`.
-4. Run CardMirror normally.
+2. Run the .exe file. If Windows blocks it, simply press `More Info` and `Run Anyway`.
+3. In the window that pops up, select the location of CardMirror's _installation file_ (if it's not automatically found). To find the installation file, right-click the CardMirror application and select `Open File Location`. Copy the file location and paste it into the installer.
+4. Select the features you want installed and press `Install Selected`.
+5. Run CardMirror normally.
 
 ### Mac
 1. Download the .zip file and extract it.
-2. Run the .app file. In the window that pops up, select the location of your CardMirror _app_ (if it's not automatically found). Your CardMirror should be in `Applications`.
-3. Select the features you want installed and press `Install Selected`.
-4. Run CardMirror normally.
+2. Run the .app file. If your Mac blocks it, go to System Settings > Privacy and Security. Scroll all the way down and press `Open Anyway`. Then, verify yourself.
+3. In the window that pops up, select the location of your CardMirror _app_ (if it's not automatically found). Your CardMirror should be in `Applications`.
+4. Select the features you want installed and press `Install Selected`.
+5. Run CardMirror normally.
 
 ### And you're done!
 
