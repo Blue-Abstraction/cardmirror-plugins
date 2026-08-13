@@ -1,0 +1,7 @@
+{
+  "id": "round-report",
+  "name": "Round Report Creator",
+  "version": "0.12.0",
+  "description": "Assign speech documents and create formatted debate round reports.",
+  "file": "plugin.js"
+}
