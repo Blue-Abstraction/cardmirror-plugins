@@ -311,7 +311,24 @@
       ['negOff1NC','1NC positions','e.g. Politics DA + States CP'],
       ['negOff2NR','2NR position(s)','e.g. Politics DA'],
     ];
-    const values = state.form || {};
+    const values = Object.assign({}, state.form || {});
+    // Optional Smart Doc / Round Context integration. Round Report remains
+    // fully standalone when Smart Doc is not installed.
+    try {
+      const rc = window.__cardMirrorRoundContext?.get?.();
+      if (rc && typeof rc === 'object') {
+        if (rc.tournament) values.tournamentName = String(rc.tournament);
+        if (rc.round) values.roundNumber = String(rc.round);
+        if (rc.judge) values.judgeName = String(rc.judge);
+        if (rc.yourTeam && rc.opponent && rc.side === 'aff') {
+          values.affTeam = String(rc.yourTeam);
+          values.negTeam = String(rc.opponent);
+        } else if (rc.yourTeam && rc.opponent && rc.side === 'neg') {
+          values.affTeam = String(rc.opponent);
+          values.negTeam = String(rc.yourTeam);
+        }
+      }
+    } catch (_) {}
     const map = {};
     const selectedPanel = document.createElement('div');
     selectedPanel.className = 'rr-selected-docs';

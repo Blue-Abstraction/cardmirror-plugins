@@ -1,0 +1,10 @@
+{
+  "id": "smart-doc",
+  "name": "Smart Doc Creator",
+  "version": "0.1.1",
+  "description": "Save round context and create properly named CardMirror speech documents with a Pocket heading.",
+  "file": "plugin.js",
+  "persistentFiles": [
+    "round-context.json"
+  ]
+}

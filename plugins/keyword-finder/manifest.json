@@ -3,5 +3,8 @@
   "name": "Keyword Finder",
   "version": "0.3.3",
   "description": "Store debate keywords inside CardMirror, scan the active document, add native comments, and rapidly purge all Keyword Finder comments.",
-  "file": "plugin.js"
+  "file": "plugin.js",
+  "persistentFiles": [
+    "keyword-state.json"
+  ]
 }

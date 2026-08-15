@@ -46,8 +46,8 @@ if sys.platform == 'darwin':
         info_plist={
             'CFBundleName': 'CardMirror Feature Installer',
             'CFBundleDisplayName': 'CardMirror Feature Installer',
-            'CFBundleShortVersionString': '1.0.0',
-            'CFBundleVersion': '1.0.0',
+            'CFBundleShortVersionString': '1.2.6',
+            'CFBundleVersion': '1.2.6',
             'NSHighResolutionCapable': True,
         },
     )

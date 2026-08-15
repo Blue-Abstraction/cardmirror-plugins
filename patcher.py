@@ -4,7 +4,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 APP_NAME = "CardMirror Feature Installer"
-INSTALLER_VERSION = "1.0.0"
+INSTALLER_VERSION = "1.2.6"
 FEATURE_ROOT = "cardmirror-features"
 BEGIN = "<!-- CardMirror Feature Installer BEGIN -->"
 END = "<!-- CardMirror Feature Installer END -->"
@@ -226,10 +226,12 @@ def install_selected(renderer, selected_ids):
             # plugin.js without exposing them to the user.
             for payload in manifest["_dir"].iterdir():
                 if payload.is_file() and payload.name != "manifest.json":
-                    # Preserve a user's existing keyword-state.json when
-                    # upgrading Keyword Finder.
                     target = dest_dir / payload.name
-                    if payload.name == "keyword-state.json" and target.exists():
+                    # Features may declare state/config files that should
+                    # survive an installer upgrade. This keeps the installer
+                    # generic as more optional features are added.
+                    persistent = set(manifest.get("persistentFiles", []))
+                    if payload.name in persistent and target.exists():
                         continue
                     shutil.copy2(payload, target)
             selected.append({
@@ -296,8 +298,8 @@ class Installer:
     def __init__(self):
         self.win = tk.Tk()
         self.win.title(APP_NAME)
-        self.win.geometry("720x560")
-        self.win.minsize(680, 520)
+        self.win.geometry("720x720")
+        self.win.minsize(680, 620)
 
         candidates = find_candidates()
         initial = display_root(candidates[0]) if candidates else ""
