@@ -48,3 +48,26 @@ Simply press the `Keyword Finder` button and create a list of keywords you want 
 Press `Delete Keywords` if you want the comments for keywords to be removed from the document.
 
 I also have a [version of this](https://github.com/Blue-Abstraction/DebateKeywordFinder) for Word that I created before if you want to check it out. Though, it's not as great due to the limitations Word has.
+
+### Smart Doc
+Smart Doc is a plugin that creates speech docs with an auto-generated pocket and consistent file naming ([Tournament] [Round #]---[Speech Name] vs. [Opponent Team]). Just click `Smart Doc` to reveal a menu where you select the speech the doc is for.
+
+This is achieved through Round Context: a form you fill out with information about the tournament/round you're in. Round Context also works with the Round Report Creator by auto-filling repetitive parts.
+
+### Collapsible Headers
+It's just what the plugin sounds like! You can collapse pockets, hats, and blocks by pressing the triangle to the left of each style. This makes viewing documents much quicker and efficient.
+
+For those who don't know what "collapsing" is, it simply hides the content underneath the style without actually deleting it.
+
+### Gendered Pronoun Review
+This plugin identifies and suggests gender neutral alternatives to gendered pronouns.
+
+This could be useful for debaters cutting lots of cards which use generic masculine language like "he," "him," or "his." It's especially prevalent in older texts, 
+and it's common for debaters to strike-through these pronouns and replace them with gender neutral ones in brackets.
+
+By clicking a button, the plugin will search the current card you're in or the highlighted selection of your cursor and allow the user to accept or deny gender neutral alternatives. At the end, the program fixes all of language the user accepted automatically.
+
+For subject-verb agreements, the plugin will only detect common ones, like "is" -> "are" and "has" -> "have." Other verbs, however, must be changed by the user manually. For example, the sentence "He runs to the house" would be changed to "~~He~~ [They] runs to the house,"
+which is incorrect. This plugin will supply comments at parts where you need to manually change the verbs.
+
+If this plugin becomes more popular or somebody wants all verbs to be fixed automatically, a local parser could be added. But, for now, that's not something I'm working towards.
