@@ -4,7 +4,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 APP_NAME = "CardMirror Feature Installer"
-INSTALLER_VERSION = "1.2.6"
+INSTALLER_VERSION = "1.3.6"
 FEATURE_ROOT = "cardmirror-features"
 BEGIN = "<!-- CardMirror Feature Installer BEGIN -->"
 END = "<!-- CardMirror Feature Installer END -->"

@@ -2,6 +2,6 @@
   "id": "collapsible-headers",
   "name": "Collapsible Headers",
   "version": "0.1.6",
-  "description": "Collapse and expand Pocket, Hat, and Block sections without mutating ProseMirror-owned document DOM.",
+  "description": "Collapse and expand Pocket, Hat, and Block sections.",
   "file": "plugin.js"
 }
