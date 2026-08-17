@@ -35,7 +35,7 @@
         #${LAYER_ID} {
           position: fixed;
           inset: 0;
-          z-index: 2147483000;
+          z-index: 80;
           pointer-events: none;
         }
 
@@ -72,6 +72,7 @@
           outline: 1px solid currentColor;
           outline-offset: 1px;
         }
+
       `;
       document.head.appendChild(style);
     }

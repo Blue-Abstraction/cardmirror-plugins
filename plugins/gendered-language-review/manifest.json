@@ -1,7 +1,7 @@
 {
   "id": "gendered-language-review",
   "name": "Gendered Pronoun Review",
-  "version": "0.1.6",
+  "version": "0.1.13",
   "description": "Review gendered pronouns in the selected text or current card, with expandable context, backtracking, transparent edits, and agreement-reminder comments.",
   "file": "plugin.js"
 }

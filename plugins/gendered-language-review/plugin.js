@@ -6,6 +6,7 @@
   const STYLE_ID = 'cardmirror-gendered-language-style';
 
   let pluginApi = null;
+  let lastApplyFailure = null;
   let lastFocusedRoot = null;
   let lastReviewContext = null;
   let reviewSessionActive = false;
@@ -501,37 +502,75 @@
     return candidates;
   }
 
-  function domRangeForOffsets(block, start, end) {
+  function domPointForOffset(block, target, isEnd = false) {
     const nodes = textNodesIn(block);
     let absolute = 0;
-    let startNode = null, startOffset = 0, endNode = null, endOffset = 0;
+    let lastText = null;
 
     for (const node of nodes) {
       const len = (node.nodeValue || '').length;
       const nodeStart = absolute;
       const nodeEnd = absolute + len;
+      lastText = node;
 
-      if (!startNode && start >= nodeStart && start <= nodeEnd) {
-        startNode = node;
-        startOffset = Math.max(0, Math.min(len, start - nodeStart));
+      /*
+       * Start positions use [start,end): a boundary belongs to the NEXT text
+       * node. End positions use (start,end]: a boundary belongs to the
+       * PREVIOUS text node. This makes ranges around marked-run boundaries
+       * deterministic.
+       */
+      const belongs = isEnd
+        ? (target > nodeStart && target <= nodeEnd) ||
+          (target === 0 && nodeStart === 0)
+        : target >= nodeStart && target < nodeEnd;
+
+      if (belongs) {
+        return {
+          node,
+          offset: Math.max(0, Math.min(len, target - nodeStart)),
+        };
       }
-      if (endNode == null && end >= nodeStart && end <= nodeEnd) {
-        endNode = node;
-        endOffset = Math.max(0, Math.min(len, end - nodeStart));
-        break;
-      }
+
       absolute = nodeEnd;
     }
 
-    if (!startNode || !endNode) return null;
+    // Allow a caret/range endpoint at the absolute end of the block.
+    if (lastText && target === absolute) {
+      return {
+        node: lastText,
+        offset: (lastText.nodeValue || '').length,
+      };
+    }
+
+    return null;
+  }
+
+  function domRangeForOffsets(block, start, end) {
+    const a = domPointForOffset(block, start, false);
+    const b = domPointForOffset(block, end, true);
+    if (!a || !b) return null;
 
     const range = document.createRange();
-    range.setStart(startNode, startOffset);
-    range.setEnd(endNode, endOffset);
+    range.setStart(a.node, a.offset);
+    range.setEnd(b.node, b.offset);
     return range;
   }
 
-  async function setEditorSelection(root, blockIndex, start, end, collapseToEnd = false) {
+  function setEditorSelectionNow(
+    root,
+    blockIndex,
+    start,
+    end,
+    collapseToEnd = false
+  ) {
+    /*
+     * Focus FIRST. On macOS, focusing a ProseMirror view can synchronously
+     * normalize/rebuild inline DOM. A Range created before focus can therefore
+     * keep stale boundary nodes and expand to the surrounding formatted run.
+     */
+    try { root.focus({ preventScroll: true }); } catch (_) { root.focus(); }
+
+    // Reacquire the live block AFTER focus in case ProseMirror replaced it.
     const block = root.children[blockIndex];
     if (!(block instanceof HTMLElement)) return false;
 
@@ -539,18 +578,54 @@
     if (!range) return false;
     if (collapseToEnd) range.collapse(false);
 
-    try { root.focus({ preventScroll: true }); } catch (_) { root.focus(); }
-
     const sel = window.getSelection?.();
     if (!sel) return false;
-    sel.removeAllRanges();
-    sel.addRange(range);
-    document.dispatchEvent(new Event('selectionchange'));
 
-    // Keyword Finder proved CardMirror needs two frames for DOM selection
-    // -> ProseMirror EditorState synchronization.
-    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    return collapseToEnd ? sel.isCollapsed : !sel.isCollapsed;
+    sel.removeAllRanges();
+
+    // setBaseAndExtent is more explicit than addRange about exact text-node
+    // boundary offsets. Fall back to addRange on older Chromium builds.
+    try {
+      sel.setBaseAndExtent(
+        range.startContainer,
+        range.startOffset,
+        range.endContainer,
+        range.endOffset
+      );
+    } catch (_) {
+      sel.addRange(range);
+    }
+
+    return collapseToEnd
+      ? sel.isCollapsed
+      : (!sel.isCollapsed && sel.rangeCount > 0);
+  }
+
+  async function setEditorSelection(
+    root,
+    blockIndex,
+    start,
+    end,
+    collapseToEnd = false
+  ) {
+    const ok = setEditorSelectionNow(
+      root,
+      blockIndex,
+      start,
+      end,
+      collapseToEnd
+    );
+    if (!ok) return false;
+
+    // Formatting/comment commands need CardMirror's ProseMirror state to catch
+    // up with the browser selection before the native ribbon command fires.
+    document.dispatchEvent(new Event('selectionchange'));
+    await new Promise(r =>
+      requestAnimationFrame(() => requestAnimationFrame(r))
+    );
+
+    const sel = window.getSelection?.();
+    return collapseToEnd ? !!sel?.isCollapsed : !!sel && !sel.isCollapsed;
   }
 
   async function previewCandidate(root, candidate) {
@@ -563,6 +638,24 @@
     );
   }
 
+  function textAround(block, start, end, radius = 36) {
+    if (!(block instanceof HTMLElement)) return '';
+    const text = blockModel(block).text;
+    const from = Math.max(0, start - radius);
+    const to = Math.min(text.length, end + radius);
+    return text.slice(from, to);
+  }
+
+  function failApply(stage, message, details = {}) {
+    lastApplyFailure = {
+      stage,
+      message,
+      ...details,
+    };
+    console.warn('[Gendered Pronoun Review]', stage, message, details);
+    return false;
+  }
+
   async function replaceSelectedText(
     root,
     blockIndex,
@@ -571,52 +664,249 @@
     expectedOriginal,
     replacement
   ) {
-    const ok = await setEditorSelection(root, blockIndex, start, end, false);
-    if (!ok) return false;
+    lastApplyFailure = null;
+
+    /*
+     * Focus first, then reacquire the block and construct the exact Range from
+     * the CURRENT DOM. This is the macOS-specific fix for stale ranges that
+     * expanded "him" into an entire formatted run.
+     */
+    try { root.focus({ preventScroll: true }); } catch (_) { root.focus(); }
+
+    const block = root.children[blockIndex];
+    if (!(block instanceof HTMLElement)) {
+      return failApply(
+        'resolve-block',
+        'The reviewed card/paragraph no longer exists after CardMirror focused the editor.'
+      );
+    }
+
+    const exactRange = domRangeForOffsets(block, start, end);
+    if (!exactRange) {
+      return failApply(
+        'build-source-range',
+        'The exact source range could not be rebuilt after focusing CardMirror.',
+        { around: textAround(block, start, end) }
+      );
+    }
+
+    const rangeText = exactRange.toString();
+    if (rangeText !== expectedOriginal) {
+      return failApply(
+        'verify-dom-range',
+        `The rebuilt DOM Range should contain "${expectedOriginal}" but contained "${rangeText}".`,
+        { around: textAround(block, start, end) }
+      );
+    }
 
     const sel = window.getSelection?.();
-    if (!sel || sel.isCollapsed) return false;
-
-    // Refuse to edit if the live text no longer matches what was reviewed.
-    // This is safer than applying an offset after CardMirror rebuilt a card.
-    if (sel.toString() !== expectedOriginal) {
-      console.warn(
-        '[Gendered Pronoun Review] expected selected text',
-        expectedOriginal,
-        'but found',
-        sel.toString()
+    if (!sel) {
+      return failApply(
+        'get-browser-selection',
+        'Chromium did not expose a browser Selection for the focused editor.'
       );
-      return false;
     }
 
-    let replaced = false;
+    sel.removeAllRanges();
     try {
-      // Replace the exact selected source word with itself + bracketed edit.
-      // This avoids collapsing a caret at a mark/style boundary (underline,
-      // bold, highlight, etc.), where Chromium/ProseMirror can choose the
-      // opposite DOM-side affinity.
-      replaced = document.execCommand(
-        'insertText',
-        false,
-        `${expectedOriginal} [${replacement}]`
+      sel.setBaseAndExtent(
+        exactRange.startContainer,
+        exactRange.startOffset,
+        exactRange.endContainer,
+        exactRange.endOffset
       );
     } catch (_) {
-      replaced = false;
+      sel.addRange(exactRange);
     }
 
-    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    return !!replaced;
+    const selectedText = sel.toString();
+    if (selectedText !== expectedOriginal) {
+      return failApply(
+        'verify-browser-selection',
+        `The DOM Range was exact, but Chromium expanded the live selection from "${expectedOriginal}" to "${selectedText}".`,
+        {
+          expected: expectedOriginal,
+          observed: selectedText,
+          around: textAround(block, start, end),
+        }
+      );
+    }
+
+    const expectedInsertedText = `${expectedOriginal} [${replacement}]`;
+    const activeBefore = document.activeElement === root
+      ? 'editor'
+      : (document.activeElement?.tagName || 'unknown');
+
+    let commandReturn = null;
+    let commandError = '';
+    try {
+      commandReturn = document.execCommand(
+        'insertText',
+        false,
+        expectedInsertedText
+      );
+    } catch (err) {
+      commandError = err instanceof Error ? err.message : String(err);
+    }
+
+    // Only AFTER the native edit request do we let ProseMirror reconcile.
+    await new Promise(r =>
+      requestAnimationFrame(() => requestAnimationFrame(r))
+    );
+
+    const liveBlock = root.children[blockIndex];
+    if (!(liveBlock instanceof HTMLElement)) {
+      return failApply(
+        'verify-insert',
+        'CardMirror rebuilt the edited block before the replacement could be verified.',
+        {
+          activeBefore,
+          commandReturn,
+          commandError,
+        }
+      );
+    }
+
+    const liveText = blockModel(liveBlock).text;
+    const observed = liveText.slice(
+      start,
+      Math.min(liveText.length, start + expectedInsertedText.length)
+    );
+
+    if (observed !== expectedInsertedText) {
+      return failApply(
+        'insert-text',
+        'The exact bracketed replacement did not appear at the reviewed position.',
+        {
+          expected: expectedInsertedText,
+          observed,
+          around: textAround(liveBlock, start, start + Math.max(1, observed.length)),
+          activeBefore,
+          commandReturn,
+          commandError,
+          queryCommandEnabled:
+            typeof document.queryCommandEnabled === 'function'
+              ? (() => {
+                  try { return document.queryCommandEnabled('insertText'); }
+                  catch (_) { return null; }
+                })()
+              : null,
+        }
+      );
+    }
+
+    return true;
+  }
+
+  async function clearInlineFormatting(root, blockIndex, start, end) {
+    const ok = await setEditorSelection(root, blockIndex, start, end, false);
+    if (!ok) {
+      return failApply(
+        'select-for-clear-formatting',
+        'The edit was inserted, but CardMirror could not reselect the original word to clear its formatting.'
+      );
+    }
+
+    const btn = document.getElementById('normal-btn');
+    if (!(btn instanceof HTMLButtonElement)) {
+      return failApply(
+        'find-clear-formatting-command',
+        "CardMirror's native Clear formatting button was unavailable."
+      );
+    }
+
+    btn.click();
+    await new Promise(r =>
+      requestAnimationFrame(() => requestAnimationFrame(r))
+    );
+    return true;
+  }
+
+  async function setRangeFontSize(
+    root,
+    blockIndex,
+    start,
+    end,
+    points
+  ) {
+    const ok = await setEditorSelection(root, blockIndex, start, end, false);
+    if (!ok) {
+      return failApply(
+        'select-for-font-size',
+        'The edit was inserted, but CardMirror could not reselect the original word to shrink it.'
+      );
+    }
+
+    const input = document.getElementById('font-size-input');
+    if (!(input instanceof HTMLInputElement)) {
+      return failApply(
+        'find-font-size-control',
+        "CardMirror's native font-size control was unavailable."
+      );
+    }
+
+    const value = String(points);
+
+    try { input.focus({ preventScroll: true }); } catch (_) { input.focus(); }
+    input.value = value;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'Enter',
+      code: 'Enter',
+      bubbles: true,
+      cancelable: true,
+    }));
+    input.dispatchEvent(new KeyboardEvent('keyup', {
+      key: 'Enter',
+      code: 'Enter',
+      bubbles: true,
+      cancelable: true,
+    }));
+
+    await new Promise(r =>
+      requestAnimationFrame(() => requestAnimationFrame(r))
+    );
+    return true;
+  }
+
+  async function prepareOriginalEvidenceEdit(
+    root,
+    blockIndex,
+    start,
+    end
+  ) {
+    // Order matters: Clear -> 8 pt -> Strikethrough.
+    if (!await clearInlineFormatting(root, blockIndex, start, end)) {
+      return false;
+    }
+    if (!await setRangeFontSize(root, blockIndex, start, end, 8)) {
+      return false;
+    }
+    return true;
   }
 
   async function strikeRange(root, blockIndex, start, end) {
     const ok = await setEditorSelection(root, blockIndex, start, end, false);
-    if (!ok) return false;
+    if (!ok) {
+      return failApply(
+        'select-for-strikethrough',
+        'The replacement was inserted, but CardMirror could not reselect the original word for strikethrough.'
+      );
+    }
 
     const btn = document.getElementById('strikethrough-btn');
-    if (!(btn instanceof HTMLButtonElement)) return false;
+    if (!(btn instanceof HTMLButtonElement)) {
+      return failApply(
+        'find-strikethrough-command',
+        'The replacement was inserted, but CardMirror\'s native Strikethrough button was unavailable.'
+      );
+    }
 
     btn.click();
-    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    await new Promise(r =>
+      requestAnimationFrame(() => requestAnimationFrame(r))
+    );
     return true;
   }
 
@@ -683,6 +973,16 @@
 
     // The source word is still at the same start/end positions because the
     // bracketed supplement was inserted AFTER it inside the same replacement.
+    //
+    // Remove inline evidence styling, shrink to 8 pt, then strike last.
+    const prepared = await prepareOriginalEvidenceEdit(
+      root,
+      blockIndex,
+      start,
+      end
+    );
+    if (!prepared) return false;
+
     return await strikeRange(root, blockIndex, start, end);
   }
 
@@ -831,6 +1131,22 @@
           <div class="gl-result">
             <p><strong>${applied}</strong> edit${applied === 1 ? '' : 's'} applied before CardMirror rejected an edit.</p>
             <p class="gl-note">The review stopped to avoid corrupting the document. Save/check the document before trying again.</p>
+            <div class="gl-warn">
+              <strong>Failure stage:</strong>
+              ${escapeHtml(lastApplyFailure?.stage || 'unknown')}
+              <br>
+              ${escapeHtml(lastApplyFailure?.message || 'No diagnostic message was captured.')}
+            </div>
+            ${
+              lastApplyFailure?.around
+                ? `<div class="gl-context"><strong>Observed text near failure:</strong><br>${escapeHtml(lastApplyFailure.around)}</div>`
+                : ''
+            }
+            ${
+              lastApplyFailure?.expected || lastApplyFailure?.observed
+                ? `<div class="gl-note">Expected: ${escapeHtml(lastApplyFailure?.expected || '')}<br>Observed: ${escapeHtml(lastApplyFailure?.observed || '')}</div>`
+                : ''
+            }
             <div class="gl-actions"><button class="gl-primary" id="gl-result-ok">OK</button></div>
           </div>`;
         dialog.querySelector('#gl-result-ok')?.addEventListener('click', () => {
@@ -1140,7 +1456,7 @@
     btn.type = 'button';
     btn.className = 'ribbon-doc-ops-btn gl-ribbon-btn';
     btn.innerHTML =
-      '<span class="gl-ribbon-label"><span>Gendered Pronoun</span><span>Review</span></span>';
+      '<span class="gl-ribbon-label"><span>Gendered Pronoun</span> <span>Review</span></span>';
     btn.title = 'Review gendered pronouns in the selection or current card';
 
     // Do the real launch on pointerdown so CardMirror cannot erase the editor

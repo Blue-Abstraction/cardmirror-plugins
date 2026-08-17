@@ -30,8 +30,6 @@ Modifying files inside `CardMirror.app` invalidates CardMirror's original code s
 
 - Round Report Creator
 - Keyword Finder
-- Smart Docs
-- Collapsible Headers
 
 The installer discovers features from `plugins/*/manifest.json`, so additional features can be added without redesigning the GUI.
 

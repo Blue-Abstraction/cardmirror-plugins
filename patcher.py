@@ -4,7 +4,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 APP_NAME = "CardMirror Feature Installer"
-INSTALLER_VERSION = "1.3.6"
+INSTALLER_VERSION = "1.4.6"
 FEATURE_ROOT = "cardmirror-features"
 BEGIN = "<!-- CardMirror Feature Installer BEGIN -->"
 END = "<!-- CardMirror Feature Installer END -->"
@@ -212,6 +212,33 @@ def install_selected(renderer, selected_ids):
 
     selected = []
     tags = []
+    ribbon_feature_ids = {
+        "round-report",
+        "keyword-finder",
+        "smart-doc",
+        "gendered-language-review",
+    }
+    selected_ribbon_ids = [
+        pid for pid in selected_ids if pid in ribbon_feature_ids
+    ]
+
+    if selected_ribbon_ids:
+        shared_src = app_dir() / "shared" / "feature-dock.js"
+        if not shared_src.is_file():
+            raise RuntimeError("Missing shared Feature Dock payload.")
+
+        shared_dest = feature_dir / "_shared"
+        shared_dest.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(shared_src, shared_dest / "feature-dock.js")
+
+        config_json = json.dumps(selected_ribbon_ids)
+        tags.append(
+            f'    <script>window.__cardMirrorFeatureDockInstalled={config_json};</script>'
+        )
+        tags.append(
+            f'    <script src="./{FEATURE_ROOT}/_shared/feature-dock.js?v={INSTALLER_VERSION}"></script>'
+        )
+
     for manifest in PLUGINS:
         pid = manifest["id"]
         dest_dir = feature_dir / pid
@@ -298,8 +325,8 @@ class Installer:
     def __init__(self):
         self.win = tk.Tk()
         self.win.title(APP_NAME)
-        self.win.geometry("720x720")
-        self.win.minsize(680, 620)
+        self.win.geometry("720x820")
+        self.win.minsize(680, 700)
 
         candidates = find_candidates()
         initial = display_root(candidates[0]) if candidates else ""

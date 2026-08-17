@@ -8,7 +8,7 @@ a = Analysis(
     [str(project / 'patcher.py')],
     pathex=[str(project)],
     binaries=[],
-    datas=[(str(project / 'plugins'), 'plugins')],
+    datas=[(str(project / 'plugins'), 'plugins'), (str(project / 'shared'), 'shared')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -46,8 +46,8 @@ if sys.platform == 'darwin':
         info_plist={
             'CFBundleName': 'CardMirror Feature Installer',
             'CFBundleDisplayName': 'CardMirror Feature Installer',
-            'CFBundleShortVersionString': '1.3.6',
-            'CFBundleVersion': '1.3.6',
+            'CFBundleShortVersionString': '1.4.6',
+            'CFBundleVersion': '1.4.6',
             'NSHighResolutionCapable': True,
         },
     )
